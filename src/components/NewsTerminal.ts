@@ -34,8 +34,6 @@ export class NewsTerminal extends Panel {
             <option value="INFLATION">INFLATION</option>
             <option value="FED_POLICY">FED POLICY</option>
             <option value="COMMODITY_DEMAND">COMMODITY</option>
-            <option value="GEOPOLITICS">GEOPOLITICS</option>
-            <option value="CENTRAL_BANK">CENTRAL BANK</option>
           </select>
           <select class="filter-select" id="impactFilter">
             <option value="-2">ALL IMPACTS</option>

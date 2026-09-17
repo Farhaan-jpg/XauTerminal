@@ -18,6 +18,21 @@
   --blue: #4a9eff;
   --purple: #a855f7;
   --cyan: #00d4ff;
+
+  /* Aliases used by panels.css */
+  --gold: #d4af37;
+  --orange: #ffaa00;
+  --orange-dim: #b8952e;
+  --header-height: 44px;
+  --footer-height: 36px;
+  --font-size-xxs: 10px;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --transition-fast: 150ms;
+  --transition-normal: 300ms;
 }
 
 * {

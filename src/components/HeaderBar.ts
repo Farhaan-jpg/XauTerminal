@@ -163,26 +163,33 @@ export class HeaderBar extends Panel {
 
   private updateSessions(): void {
     const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const utcHour = now.getUTCHours() + now.getUTCMinutes() / 60;
 
     const sessions = [
-      { id: 'tokyo', open: 0, close: 9, name: 'TYO' },
-      { id: 'london', open: 8, close: 17, name: 'LDN' },
-      { id: 'newyork', open: 13, close: 22, name: 'NYC' },
+      { id: 'tokyo', open: 0, close: 9, name: 'TYO', tz: 'Asia/Tokyo' },
+      { id: 'london', open: 8, close: 17, name: 'LDN', tz: 'Europe/London' },
+      { id: 'newyork', open: 13, close: 22, name: 'NYC', tz: 'America/New_York' },
     ];
 
     sessions.forEach(s => {
       const el = this.sessionClocks[s.id];
       if (!el) return;
 
-      const openTime = new Date(utc + s.open * 3600000);
-      const closeTime = new Date(utc + s.close * 3600000);
-      const isOpen = now >= openTime && now < closeTime;
+      const isOpen = s.open <= s.close
+        ? utcHour >= s.open && utcHour < s.close
+        : utcHour >= s.open || utcHour < s.close;
 
       const timeEl = el.querySelector('.session-time');
       const statusEl = el.querySelector('.session-status');
 
-      if (timeEl) timeEl.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }) + ' UTC';
+      if (timeEl) {
+        timeEl.textContent = now.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: s.tz,
+        });
+      }
       if (statusEl) {
         statusEl.textContent = isOpen ? 'OPEN' : 'CLOSED';
         statusEl.className = `session-status ${isOpen ? 'open' : 'closed'}`;
@@ -198,15 +205,38 @@ export class HeaderBar extends Panel {
   public playAlert(): void {
     if (!this.soundEnabled) return;
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const ctx = this.getAudioContext();
       if (ctx.state === 'suspended') {
-        ctx.resume().then(() => this.playTone(ctx));
+        ctx.resume().then(() => this.playTone(ctx)).catch(() => {});
       } else {
         this.playTone(ctx);
       }
     } catch (e) {
       console.warn('Audio play failed:', e);
     }
+  }
+
+  private audioCtx: AudioContext | null = null;
+  private audioUnlockBound = false;
+
+  private getAudioContext(): AudioContext {
+    if (!this.audioCtx) {
+      this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.unlockAudio();
+    }
+    return this.audioCtx;
+  }
+
+  private unlockAudio(): void {
+    if (this.audioUnlockBound || !this.audioCtx) return;
+    this.audioUnlockBound = true;
+    const unlock = () => {
+      if (this.audioCtx && this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume().catch(() => {});
+      }
+    };
+    document.addEventListener('click', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
   }
 
   private playTone(ctx: AudioContext): void {

@@ -210,6 +210,7 @@ export class App {
       case 'gold':
         this.lastGoldPrice = data;
         this.headerBar.updatePrice(data);
+        this.chartCanvas.updatePrice(data.mid);
         break;
       case 'news':
         this.newsTerminal.update(data);

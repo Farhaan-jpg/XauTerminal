@@ -16,6 +16,7 @@ export class EconomicPanel extends Panel {
   private nextEventEl: HTMLElement | null = null;
   private countdownEl: HTMLElement | null = null;
   private eventsContainer: HTMLElement | null = null;
+  private countdownTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     super({ id: 'economicCalendar', title: 'ECONOMIC CAL', className: 'economic-panel', showCount: false, trackActivity: false });
@@ -63,12 +64,21 @@ export class EconomicPanel extends Panel {
   private startCountdown(event: any): void {
     if (!event?.date || !this.countdownEl) return;
 
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer);
+      this.countdownTimer = null;
+    }
+
     const targetTime = new Date(event.date).getTime();
     const update = () => {
       const diff = targetTime - Date.now();
       if (diff <= 0) {
         this.countdownEl!.textContent = 'RELEASED';
         this.countdownEl!.classList.add('released');
+        if (this.countdownTimer) {
+          clearInterval(this.countdownTimer);
+          this.countdownTimer = null;
+        }
         return;
       }
 
@@ -79,8 +89,7 @@ export class EconomicPanel extends Panel {
     };
 
     update();
-    const interval = setInterval(update, 1000);
-    this.countdownEl.dataset.interval = interval.toString();
+    this.countdownTimer = setInterval(update, 1000);
   }
 
   private renderEvents(events: MacroEvent[]): void {
@@ -143,5 +152,13 @@ export class EconomicPanel extends Panel {
       return dev > 0 ? '→ Growth stronger → Bearish Gold' : '→ Growth weaker → Bullish Gold';
     }
     return '→ Mixed implications';
+  }
+
+  public destroy(): void {
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer);
+      this.countdownTimer = null;
+    }
+    super.destroy();
   }
 }

@@ -85,25 +85,24 @@ function broadcast(channel, data) {
   });
 }
 
-// Internal fetch helpers for broadcasting
+// Broadcast helpers - call handlers directly (no self-HTTP fetch)
+async function callHandler(handler, channel) {
+  return new Promise((resolve) => {
+    const res = {
+      json: (data) => resolve(data),
+      status: () => res,
+      send: () => resolve(null),
+    };
+    handler({}, res).catch(() => resolve(null));
+  });
+}
+
 async function fetchGoldInternal() {
-  try {
-    const res = await fetch(`http://localhost:${PORT}/api/gold`);
-    return res.json();
-  } catch (e) {
-    console.error('[WS] Gold fetch error:', e);
-    return null;
-  }
+  return callHandler(goldPriceHandler, 'gold');
 }
 
 async function fetchNewsInternal() {
-  try {
-    const res = await fetch(`http://localhost:${PORT}/api/news`);
-    return res.json();
-  } catch (e) {
-    console.error('[WS] News fetch error:', e);
-    return null;
-  }
+  return callHandler(newsFeedHandler, 'news');
 }
 
 setInterval(async () => {

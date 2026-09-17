@@ -6,3 +6,5 @@ dist/
 *.tsbuildinfo
 coverage/
 .nyc_output/
+world_watcher-main/
+world_watcher-main.zip
