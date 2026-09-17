@@ -18,6 +18,7 @@ export class LiquidityPanel extends Panel {
   private fvgEl!: HTMLElement;
   private eqhEqlEl!: HTMLElement;
   private sessionLevelsEl!: HTMLElement;
+  private priceSeries: { time: number; price: number }[] = [];
 
   constructor() {
     super({ id: 'liquidity', title: 'LIQUIDITY', className: 'liquidity', showCount: false, trackActivity: false });
@@ -63,11 +64,48 @@ export class LiquidityPanel extends Panel {
   }
 
   public update(data: OrderBookData): void {
+    this.lastData = this.buildTechnicals(data);
     this.renderPositionRatio(data);
     this.renderFVGs(data.fvgs);
     this.renderEqhEql(data.eqhEql);
     this.renderSessionLevels(data);
     this.renderOrderBook(data.buckets, data.currentPrice);
+  }
+
+  private buildTechnicals(data: OrderBookData): any {
+    const price = data.currentPrice;
+
+    const last = this.priceSeries[this.priceSeries.length - 1];
+    if (this.priceSeries.length === 0 || !last || Math.abs(last.price - price) > 0.001) {
+      this.priceSeries.push({ time: Date.now(), price });
+      if (this.priceSeries.length > 200) this.priceSeries.shift();
+    }
+
+    const prices = this.priceSeries.map(p => p.price);
+
+    let nearestFvg = Infinity;
+    for (const fvg of data.fvgs || []) {
+      const d = parseFloat(fvg.distance);
+      if (!isNaN(d)) nearestFvg = Math.min(nearestFvg, d);
+    }
+    if (nearestFvg === Infinity) nearestFvg = 5;
+
+    let orderBookBias = 0;
+    if (data.bias?.toUpperCase() === 'LONG') orderBookBias = 1;
+    else if (data.bias?.toUpperCase() === 'SHORT') orderBookBias = -1;
+    const longPct = parseFloat(data.longPct);
+    if (!isNaN(longPct)) orderBookBias = Math.max(-1, Math.min(1, orderBookBias + (longPct - 50) / 25));
+
+    return {
+      ema9: ema(prices, 9),
+      ema21: ema(prices, 21),
+      rsi: rsi(prices, 14),
+      price,
+      fvgDistance: nearestFvg,
+      orderBookBias: parseFloat(orderBookBias.toFixed(2)),
+      longPct: longPct || 50,
+      bias: data.bias,
+    };
   }
 
   private renderPositionRatio(data: OrderBookData): void {
@@ -153,4 +191,44 @@ private renderOrderBook(buckets: any[], currentPrice: number): void {
       `;
     }).join('');
   }
+}
+
+function ema(prices: number[], period: number): number {
+  if (prices.length === 0) return 2650;
+  const seed = prices[prices.length - 1];
+  if (seed === undefined) return 2650;
+  if (prices.length < period) return seed;
+  const multiplier = 2 / (period + 1);
+  let value = prices.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < prices.length; i++) {
+    const p = prices[i];
+    if (p !== undefined) value = (p - value) * multiplier + value;
+  }
+  return parseFloat(value.toFixed(2));
+}
+
+function rsi(prices: number[], period: number): number {
+  if (prices.length < period + 1) return 50;
+  let gains = 0;
+  let losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const curr = prices[prices.length - i];
+    const prev = prices[prices.length - i - 1];
+    if (curr === undefined || prev === undefined) continue;
+    const change = curr - prev;
+    if (change > 0) gains += change;
+    else losses -= change;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  for (let i = period + 1; i < prices.length; i++) {
+    const curr = prices[i];
+    const prev = prices[i - 1];
+    if (curr === undefined || prev === undefined) continue;
+    const change = curr - prev;
+    avgGain = (avgGain * (period - 1) + Math.max(0, change)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(0, -change)) / period;
+  }
+  if (avgLoss === 0) return 100;
+  return parseFloat((100 - 100 / (1 + avgGain / avgLoss)).toFixed(1));
 }

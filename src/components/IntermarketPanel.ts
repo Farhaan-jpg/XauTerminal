@@ -47,6 +47,7 @@ export class IntermarketPanel extends Panel {
   }
 
   public update(data: { symbols: IntermarketSymbol[]; correlations: Record<string, CorrelationData>; goldSilverRatio: string }): void {
+    this.lastData = data;
     this.renderSymbols(data.symbols);
     this.renderCorrelations(data.correlations);
     this.checkDecouple(data.symbols, data.correlations);

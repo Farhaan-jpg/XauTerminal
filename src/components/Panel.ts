@@ -1,3 +1,5 @@
+import { PANEL_LAYOUT } from '@/config';
+
 export interface PanelOptions {
   id: string;
   title: string;
@@ -5,36 +7,29 @@ export interface PanelOptions {
   className?: string;
   trackActivity?: boolean;
   infoTooltip?: string;
+  controls?: boolean;
 }
 
-const PANEL_SPANS_KEY = 'xauusd-panel-spans';
+export const PANEL_ACTION_EVENT = 'xauusd:panel-action';
 
-function loadPanelSpans(): Record<string, number> {
+const PANEL_HEIGHTS_KEY = 'xauusd-panel-heights';
+
+function loadPanelHeights(): Record<string, number> {
   try {
-    const stored = localStorage.getItem(PANEL_SPANS_KEY);
+    const stored = localStorage.getItem(PANEL_HEIGHTS_KEY);
     return stored ? JSON.parse(stored) : {};
   } catch {
     return {};
   }
 }
 
-function savePanelSpan(panelId: string, span: number): void {
-  const spans = loadPanelSpans();
-  spans[panelId] = span;
-  localStorage.setItem(PANEL_SPANS_KEY, JSON.stringify(spans));
+export interface PanelActionDetail {
+  id: string;
+  action: 'maximize' | 'restore' | 'collapse' | 'expand' | 'close' | 'open';
 }
 
-function heightToSpan(height: number): number {
-  if (height >= 500) return 4;
-  if (height >= 350) return 3;
-  if (height >= 250) return 2;
-  return 1;
-}
-
-function setSpanClass(element: HTMLElement, span: number): void {
-  element.classList.remove('span-1', 'span-2', 'span-3', 'span-4');
-  element.classList.add(`span-${span}`);
-  element.classList.add('resized');
+export function dispatchPanelAction(id: string, action: PanelActionDetail['action']): void {
+  window.dispatchEvent(new CustomEvent<PanelActionDetail>(PANEL_ACTION_EVENT, { detail: { id, action } }));
 }
 
 export class Panel {
@@ -44,6 +39,8 @@ export class Panel {
   protected countEl: HTMLElement | null = null;
   protected newBadgeEl: HTMLElement | null = null;
   protected panelId: string;
+  public lastData: any = null;
+
   private tooltipCloseHandler: (() => void) | null = null;
   private resizeHandle: HTMLElement | null = null;
   private isResizing = false;
@@ -51,7 +48,9 @@ export class Panel {
   private startHeight = 0;
   private onTouchMove: ((e: TouchEvent) => void) | null = null;
   private onTouchEnd: (() => void) | null = null;
-  private onDocMouseUp: (() => void) | null = null;
+  private maximizeBtn: HTMLElement | null = null;
+  private minimizeBtn: HTMLElement | null = null;
+  private closeBtn: HTMLElement | null = null;
 
   constructor(options: PanelOptions) {
     this.panelId = options.id;
@@ -104,12 +103,54 @@ export class Panel {
 
     this.header.appendChild(headerLeft);
 
+    const headerRight = document.createElement('div');
+    headerRight.className = 'panel-header-right';
+
     if (options.showCount) {
       this.countEl = document.createElement('span');
       this.countEl.className = 'panel-count';
       this.countEl.textContent = '0';
-      this.header.appendChild(this.countEl);
+      headerRight.appendChild(this.countEl);
     }
+
+    if (options.controls !== false) {
+      const controls = document.createElement('div');
+      controls.className = 'panel-controls';
+
+      this.minimizeBtn = document.createElement('button');
+      this.minimizeBtn.className = 'panel-control-btn minimize';
+      this.minimizeBtn.title = 'Minimize (collapse)';
+      this.minimizeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+      this.minimizeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dispatchPanelAction(this.panelId, this.isCollapsed() ? 'expand' : 'collapse');
+      });
+
+      this.maximizeBtn = document.createElement('button');
+      this.maximizeBtn.className = 'panel-control-btn maximize';
+      this.maximizeBtn.title = 'Maximize / Restore';
+      this.maximizeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="9" x2="21" y2="9"/></svg>';
+      this.maximizeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dispatchPanelAction(this.panelId, this.isMaximized() ? 'restore' : 'maximize');
+      });
+
+      this.closeBtn = document.createElement('button');
+      this.closeBtn.className = 'panel-control-btn close';
+      this.closeBtn.title = 'Close (hide)';
+      this.closeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      this.closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dispatchPanelAction(this.panelId, 'close');
+      });
+
+      controls.appendChild(this.minimizeBtn);
+      controls.appendChild(this.maximizeBtn);
+      controls.appendChild(this.closeBtn);
+      headerRight.appendChild(controls);
+    }
+
+    this.header.appendChild(headerRight);
 
     this.content = document.createElement('div');
     this.content.className = 'panel-content';
@@ -125,10 +166,10 @@ export class Panel {
     this.element.appendChild(this.resizeHandle);
     this.setupResizeHandlers();
 
-    const savedSpans = loadPanelSpans();
-    const savedSpan = savedSpans[this.panelId];
-    if (savedSpan && savedSpan > 1) {
-      setSpanClass(this.element, savedSpan);
+    const savedHeights = loadPanelHeights();
+    const savedHeight = savedHeights[this.panelId];
+    if (savedHeight && savedHeight >= PANEL_LAYOUT.minHeight) {
+      this.element.style.height = `${savedHeight}px`;
     }
 
     this.showLoading();
@@ -136,6 +177,11 @@ export class Panel {
 
   private setupResizeHandlers(): void {
     if (!this.resizeHandle) return;
+
+    const applyHeight = (height: number) => {
+      const clamped = Math.max(PANEL_LAYOUT.minHeight, height);
+      this.element.style.height = `${clamped}px`;
+    };
 
     const onMouseDown = (e: MouseEvent) => {
       e.preventDefault();
@@ -146,31 +192,21 @@ export class Panel {
       this.element.classList.add('resizing');
       this.element.draggable = false;
       this.resizeHandle?.classList.add('active');
+      this.element.dataset.resizing = 'true';
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
     };
 
     const onMouseMove = (e: MouseEvent) => {
       if (!this.isResizing) return;
-      const deltaY = e.clientY - this.startY;
-      const newHeight = Math.max(200, this.startHeight + deltaY);
-      const span = heightToSpan(newHeight);
-      setSpanClass(this.element, span);
+      applyHeight(this.startHeight + (e.clientY - this.startY));
     };
 
     const onMouseUp = () => {
       if (!this.isResizing) return;
-      this.isResizing = false;
-      this.element.classList.remove('resizing');
-      this.element.draggable = true;
-      this.resizeHandle?.classList.remove('active');
+      this.finishResize();
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
-
-      const currentSpan = this.element.classList.contains('span-4') ? 4 :
-                          this.element.classList.contains('span-3') ? 3 :
-                          this.element.classList.contains('span-2') ? 2 : 1;
-      savePanelSpan(this.panelId, currentSpan);
     };
 
     this.resizeHandle.addEventListener('mousedown', onMouseDown);
@@ -183,10 +219,6 @@ export class Panel {
         return false;
       }
     }, true);
-
-    this.resizeHandle.addEventListener('mousedown', () => {
-      this.element.dataset.resizing = 'true';
-    });
 
     this.resizeHandle.addEventListener('dblclick', () => {
       this.resetHeight();
@@ -210,29 +242,12 @@ export class Panel {
       if (!this.isResizing) return;
       const touch = e.touches[0];
       if (!touch) return;
-      const deltaY = touch.clientY - this.startY;
-      const newHeight = Math.max(200, this.startHeight + deltaY);
-      const span = heightToSpan(newHeight);
-      setSpanClass(this.element, span);
+      applyHeight(this.startHeight + (touch.clientY - this.startY));
     };
 
     this.onTouchEnd = () => {
       if (!this.isResizing) return;
-      this.isResizing = false;
-      this.element.classList.remove('resizing');
-      this.element.draggable = true;
-      delete this.element.dataset.resizing;
-      this.resizeHandle?.classList.remove('active');
-      const currentSpan = this.element.classList.contains('span-4') ? 4 :
-                          this.element.classList.contains('span-3') ? 3 :
-                          this.element.classList.contains('span-2') ? 2 : 1;
-      savePanelSpan(this.panelId, currentSpan);
-    };
-
-    this.onDocMouseUp = () => {
-      if (this.element.dataset.resizing) {
-        delete this.element.dataset.resizing;
-      }
+      this.finishResize();
     };
 
     document.addEventListener('touchmove', this.onTouchMove, { passive: false });
@@ -240,8 +255,75 @@ export class Panel {
     document.addEventListener('mouseup', this.onDocMouseUp);
   }
 
+  private finishResize(): void {
+    this.isResizing = false;
+    this.element.classList.remove('resizing');
+    this.element.draggable = true;
+    this.resizeHandle?.classList.remove('active');
+    delete this.element.dataset.resizing;
+    const heights = loadPanelHeights();
+    heights[this.panelId] = parseFloat(this.element.style.height) || PANEL_LAYOUT.defaultHeight;
+    try {
+      localStorage.setItem(PANEL_HEIGHTS_KEY, JSON.stringify(heights));
+    } catch { /* ignore */ }
+    window.dispatchEvent(new Event('xauusd:panel-resized'));
+  }
+
+  private onDocMouseUp = (): void => {
+    if (this.isResizing) this.finishResize();
+  };
+
   public getElement(): HTMLElement {
     return this.element;
+  }
+
+  public isCollapsed(): boolean {
+    return this.element.classList.contains('collapsed');
+  }
+
+  public isMaximized(): boolean {
+    return this.element.classList.contains('maximized');
+  }
+
+  public collapse(): void {
+    this.element.classList.add('collapsed');
+    this.minimizeBtn?.classList.add('active');
+    if (this.resizeHandle) this.resizeHandle.style.display = 'none';
+  }
+
+  public expand(): void {
+    this.element.classList.remove('collapsed');
+    this.minimizeBtn?.classList.remove('active');
+    if (this.resizeHandle) this.resizeHandle.style.display = '';
+  }
+
+  public toggleCollapse(): void {
+    if (this.isCollapsed()) this.expand();
+    else this.collapse();
+  }
+
+  public maximize(): void {
+    this.element.classList.remove('collapsed');
+    this.minimizeBtn?.classList.remove('active');
+    this.element.classList.add('maximized');
+    this.maximizeBtn?.classList.add('active');
+    this.maximizeBtn?.setAttribute('data-restore', 'true');
+  }
+
+  public restore(): void {
+    this.element.classList.remove('maximized');
+    this.maximizeBtn?.classList.remove('active');
+    this.maximizeBtn?.removeAttribute('data-restore');
+  }
+
+  public close(): void {
+    this.element.classList.add('hidden');
+    this.closeBtn?.classList.add('active');
+  }
+
+  public open(): void {
+    this.element.classList.remove('hidden');
+    this.closeBtn?.classList.remove('active');
   }
 
   public showLoading(message = 'Loading'): void {
@@ -322,10 +404,27 @@ export class Panel {
   }
 
   public resetHeight(): void {
-    this.element.classList.remove('resized', 'span-1', 'span-2', 'span-3', 'span-4');
-    const spans = loadPanelSpans();
+    this.element.style.removeProperty('height');
+    this.element.classList.remove('resized');
+    const heights = loadPanelHeights();
+    delete heights[this.panelId];
+    try {
+      localStorage.setItem(PANEL_HEIGHTS_KEY, JSON.stringify(heights));
+    } catch { /* ignore */ }
+    const spans = this.loadSpans();
     delete spans[this.panelId];
-    localStorage.setItem(PANEL_SPANS_KEY, JSON.stringify(spans));
+    try {
+      localStorage.setItem('xauusd-panel-spans', JSON.stringify(spans));
+    } catch { /* ignore */ }
+  }
+
+  private loadSpans(): Record<string, number> {
+    try {
+      const stored = localStorage.getItem('xauusd-panel-spans');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
   }
 
   public destroy(): void {
@@ -340,10 +439,6 @@ export class Panel {
     if (this.onTouchEnd) {
       document.removeEventListener('touchend', this.onTouchEnd);
       this.onTouchEnd = null;
-    }
-    if (this.onDocMouseUp) {
-      document.removeEventListener('mouseup', this.onDocMouseUp);
-      this.onDocMouseUp = null;
     }
   }
 }

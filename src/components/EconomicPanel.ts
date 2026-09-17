@@ -40,6 +40,7 @@ export class EconomicPanel extends Panel {
   }
 
   public update(data: { events: MacroEvent[]; nextEvent: any; timestamp: number }): void {
+    this.lastData = data;
     this.renderNextEvent(data.nextEvent);
     this.renderEvents(data.events);
     this.startCountdown(data.nextEvent);

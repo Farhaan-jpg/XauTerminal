@@ -1,4 +1,5 @@
 import { Panel } from './Panel';
+import { LAYOUT_PRESETS, ALL_PANEL_IDS, PANEL_META } from '@/config';
 
 interface GoldPrice {
   symbol: string;
@@ -79,9 +80,18 @@ export class HeaderBar extends Panel {
           <button class="icon-btn" id="soundToggle" title="Toggle Alerts">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
           </button>
-          <button class="icon-btn" id="layoutToggle" title="Layout Presets">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          </button>
+          <div class="layout-menu-wrap" id="layoutMenuWrap">
+            <button class="icon-btn" id="layoutToggle" title="Layout Presets">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </button>
+            <div class="layout-menu" id="layoutMenu">
+              <div class="menu-title">LAYOUT PRESETS</div>
+              <div class="menu-presets" id="menuPresets"></div>
+              <div class="menu-title">PANELS</div>
+              <div class="menu-panels" id="menuPanels"></div>
+              <button class="menu-reset" id="menuReset">RESET LAYOUT</button>
+            </div>
+          </div>
           <button class="icon-btn" id="refreshBtn" title="Emergency Refresh">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
           </button>
@@ -116,6 +126,84 @@ export class HeaderBar extends Panel {
     this.content.querySelector('#refreshBtn')?.addEventListener('click', () => {
       window.dispatchEvent(new CustomEvent('xauusd:refresh'));
     });
+
+    this.setupLayoutMenu();
+  }
+
+  private setupLayoutMenu(): void {
+    const wrap = this.content.querySelector('#layoutMenuWrap') as HTMLElement;
+    const toggle = this.content.querySelector('#layoutToggle') as HTMLElement;
+    const menu = this.content.querySelector('#layoutMenu') as HTMLElement;
+    if (!wrap || !toggle || !menu) return;
+
+    const presetsEl = menu.querySelector('#menuPresets') as HTMLElement;
+    const panelsEl = menu.querySelector('#menuPanels') as HTMLElement;
+
+    LAYOUT_PRESETS.forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = 'menu-preset';
+      btn.dataset.preset = p.id;
+      btn.innerHTML = `<span class="menu-preset-name">${p.name}</span><span class="menu-preset-desc">${p.desc}</span>`;
+      btn.addEventListener('click', () => {
+        window.dispatchEvent(new CustomEvent('xauusd:layout-preset', { detail: { id: p.id } }));
+        this.closeMenu(menu);
+      });
+      presetsEl.appendChild(btn);
+    });
+
+    ALL_PANEL_IDS.forEach(id => {
+      const meta = PANEL_META[id];
+      const label = document.createElement('label');
+      label.className = 'menu-panel';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.panel = id;
+      cb.checked = true;
+      const span = document.createElement('span');
+      span.textContent = meta ? meta.name : id;
+      label.appendChild(cb);
+      label.appendChild(span);
+      cb.addEventListener('change', () => {
+        window.dispatchEvent(new CustomEvent('xauusd:toggle-panel', { detail: { id, visible: cb.checked } }));
+      });
+      panelsEl.appendChild(label);
+    });
+
+    this.content.querySelector('#menuReset')?.addEventListener('click', () => {
+      window.dispatchEvent(new CustomEvent('xauusd:reset-layout'));
+      this.closeMenu(menu);
+    });
+
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = menu.classList.contains('open');
+      this.closeMenu(menu);
+      if (!open) {
+        window.dispatchEvent(new CustomEvent('xauusd:menu-open'));
+        menu.classList.add('open');
+      }
+    });
+
+    menu.addEventListener('click', (e) => e.stopPropagation());
+
+    document.addEventListener('click', () => {
+      this.closeMenu(menu);
+    });
+
+    window.addEventListener('xauusd:panel-state', (e) => {
+      const state = (e as CustomEvent<{ presetId: string; hidden: Record<string, boolean>; chartOnly?: boolean }>).detail;
+      menu.querySelectorAll('.menu-preset').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('data-preset') === state.presetId);
+      });
+      menu.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach(cb => {
+        const id = cb.dataset.panel || '';
+        cb.checked = !state.hidden[id];
+      });
+    });
+  }
+
+  private closeMenu(menu: HTMLElement): void {
+    menu.classList.remove('open');
   }
 
   public updatePrice(data: GoldPrice): void {

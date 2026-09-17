@@ -23,18 +23,101 @@ export const PANEL_LAYOUT = {
   minPanelWidth: 280,
   maxPanelWidth: 800,
   gap: 4,
+  defaultHeight: 320,
+  minHeight: 200,
 };
 
-export const DOCK_PRESETS = {
-  default: ['biasEngine', 'geopolitics', 'newsTerminal', 'economicCalendar', 'intermarket', 'liquidity'],
-  compact: ['biasEngine', 'geopolitics', 'newsTerminal', 'economicCalendar'],
-  full: ['biasEngine', 'geopolitics', 'newsTerminal', 'economicCalendar', 'intermarket', 'liquidity'],
+export const PANEL_META: Record<string, { name: string }> = {
+  biasEngine: { name: 'Bias Engine' },
+  geopolitics: { name: 'Geopolitics' },
+  newsTerminal: { name: 'News Wire' },
+  economicCalendar: { name: 'Economic Cal' },
+  intermarket: { name: 'Intermarket' },
+  liquidity: { name: 'Liquidity' },
+};
+
+export const ALL_PANEL_IDS: string[] = [
+  'biasEngine',
+  'geopolitics',
+  'newsTerminal',
+  'economicCalendar',
+  'intermarket',
+  'liquidity',
+];
+
+export interface LayoutPreset {
+  id: string;
+  name: string;
+  desc: string;
+  visible: string[];
+  spans: Record<string, number>;
+  chartOnly?: boolean;
+}
+
+export const LAYOUT_PRESETS: LayoutPreset[] = [
+  {
+    id: 'default',
+    name: 'DEFAULT',
+    desc: 'All panels, balanced watchtower',
+    visible: [...ALL_PANEL_IDS],
+    spans: { biasEngine: 2, geopolitics: 2, newsTerminal: 3, economicCalendar: 2, intermarket: 2, liquidity: 2 },
+    chartOnly: false,
+  },
+  {
+    id: 'scalping',
+    name: 'SCALPING',
+    desc: 'Fast feeds: Bias + News + Liquidity',
+    visible: ['biasEngine', 'newsTerminal', 'liquidity'],
+    spans: { biasEngine: 2, newsTerminal: 3, liquidity: 2 },
+    chartOnly: false,
+  },
+  {
+    id: 'swing',
+    name: 'SWING',
+    desc: 'Thesis: Bias + Geopolitics + Macro + Intermarket',
+    visible: ['biasEngine', 'geopolitics', 'economicCalendar', 'intermarket'],
+    spans: { biasEngine: 2, geopolitics: 2, economicCalendar: 2, intermarket: 2 },
+    chartOnly: false,
+  },
+  {
+    id: 'macro',
+    name: 'MACRO WATCH',
+    desc: 'News + Calendar + Intermarket focus',
+    visible: ['newsTerminal', 'economicCalendar', 'intermarket'],
+    spans: { newsTerminal: 3, economicCalendar: 2, intermarket: 2 },
+    chartOnly: false,
+  },
+  {
+    id: 'chart',
+    name: 'CHART ROOM',
+    desc: 'Full-screen chart',
+    visible: [],
+    spans: {},
+    chartOnly: true,
+  },
+];
+
+export interface PanelViewState {
+  collapsed: Record<string, boolean>;
+  hidden: Record<string, boolean>;
+  presetId: string;
+  chartOnly: boolean;
+  chartCollapsed: boolean;
+}
+
+export const DEFAULT_VIEW_STATE: PanelViewState = {
+  collapsed: {},
+  hidden: {},
+  presetId: 'default',
+  chartOnly: false,
+  chartCollapsed: false,
 };
 
 export const STORAGE_KEYS = {
   panels: 'xauusd-panels',
   panelOrder: 'xauusd-panel-order',
   panelSpans: 'xauusd-panel-spans',
+  panelHeights: 'xauusd-panel-heights',
   settings: 'xauusd-settings',
   layout: 'xauusd-layout',
 };

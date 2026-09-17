@@ -46,6 +46,7 @@ export class GeopoliticsPanel extends Panel {
   }
 
   public update(data: any): void {
+    this.lastData = data;
     const threatLevel = data.threatLevel || 0;
     const defcon = data.defcon || 5;
     const hotspots = data.hotspots || [];

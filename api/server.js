@@ -60,6 +60,8 @@ wss.on('connection', (ws, req) => {
       const data = JSON.parse(msg.toString());
       if (data.type === 'subscribe') {
         ws.subscriptions = data.channels || [];
+      } else if (data.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
       }
     } catch { /* ignore */ }
   });

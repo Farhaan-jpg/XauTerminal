@@ -23,6 +23,7 @@ export class StreamManager {
   private stateChangeHandlers: ((state: ConnectionState) => void)[] = [];
   private latencyHistory: number[] = [];
   private lastPingTime = 0;
+  private visibilityBound = false;
 
   constructor(config: Partial<StreamConfig> = {}) {
     this.config = {
@@ -42,13 +43,30 @@ export class StreamManager {
       }
 
       this.setState('connecting');
-      
+      this.bindVisibilityReconnect();
+
       try {
         this.ws = new WebSocket(this.config.url, this.config.protocols);
         this.setupEventHandlers(resolve);
       } catch (error) {
         this.setState('error');
         this.scheduleReconnect();
+      }
+    });
+  }
+
+  private bindVisibilityReconnect(): void {
+    if (this.visibilityBound) return;
+    this.visibilityBound = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      if (this.state !== 'open' && !this.ws || (this.ws && this.ws.readyState !== WebSocket.OPEN)) {
+        console.log('[StreamManager] Tab visible — reconnecting WebSocket');
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+        this.connect().catch(() => this.scheduleReconnect());
       }
     });
   }
@@ -117,16 +135,23 @@ export class StreamManager {
 
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
-      console.error('[StreamManager] Max reconnect attempts reached');
+      console.error('[StreamManager] Max reconnect attempts reached, will retry on tab focus');
       return;
     }
 
-    const delay = this.config.reconnectInterval * Math.pow(1.5, this.reconnectAttempts);
+    const maxDelay = 30000;
+    const rawDelay = this.config.reconnectInterval * Math.pow(1.5, this.reconnectAttempts);
+    const delay = Math.min(rawDelay, maxDelay);
     this.reconnectAttempts++;
-    
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+
     console.log(`[StreamManager] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
-    
+
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       this.connect().catch(() => {});
     }, delay);
   }
