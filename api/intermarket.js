@@ -146,7 +146,7 @@ export async function intermarketHandler(req, res) {
         change24h = mock?.change24h || 0;
       }
 
-      return { id: symbol.id, name: symbol.name, value: parseFloat(value.toFixed(s.id === 'DXY' ? 2 : 4)), change24h: parseFloat(change24h.toFixed(2)), type: symbol.type, timestamp: Date.now() };
+      return { id: symbol.id, name: symbol.name, value: parseFloat(value.toFixed(symbol.id === 'DXY' ? 2 : 4)), change24h: parseFloat(change24h.toFixed(2)), type: symbol.type, timestamp: Date.now() };
     }));
 
     const data = {

@@ -1,17 +1,10 @@
 import fetch from 'node-fetch';
 import { getCached, setCache, getStale } from './_cache.js';
 
+const https = await import('https');
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
 const FREE_APIS = [
-  {
-    name: 'metals.live',
-    url: 'https://api.metals.live/v1/spot/gold',
-    parse: (data) => {
-      const spot = data[0]?.spot || data[0]?.price;
-      if (!spot) return null;
-      const mid = parseFloat(spot);
-      return { mid, bid: mid - 0.05, ask: mid + 0.05, spread: '0.10' };
-    }
-  },
   {
     name: 'gold-api.com',
     url: 'https://api.gold-api.com/price/XAU',
@@ -40,6 +33,16 @@ const FREE_APIS = [
       const mid = 1 / rate;
       return { mid, bid: mid - 0.05, ask: mid + 0.05, spread: '0.10' };
     }
+  },
+  {
+    name: 'metals.live',
+    url: 'https://api.metals.live/v1/spot/gold',
+    parse: (data) => {
+      const spot = data[0]?.spot || data[0]?.price;
+      if (!spot) return null;
+      const mid = parseFloat(spot);
+      return { mid, bid: mid - 0.05, ask: mid + 0.05, spread: '0.10' };
+    }
   }
 ];
 
@@ -53,7 +56,10 @@ export async function goldPriceHandler(req, res) {
 
     for (const api of FREE_APIS) {
       try {
-        const response = await fetch(api.url, { timeout: 5000 });
+        const response = await fetch(api.url, { 
+          timeout: 5000,
+          agent: httpsAgent
+        });
         if (!response.ok) continue;
         const data = await response.json();
         const parsed = api.parse(data);
