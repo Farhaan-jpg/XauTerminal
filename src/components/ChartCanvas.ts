@@ -49,7 +49,7 @@ export class ChartCanvas extends Panel {
     });
     this.content.querySelector('#currentInterval')!.textContent = interval === 'D' ? '1D' : interval === '240' ? '4H' : interval === '60' ? '1H' : `${interval}m`;
     
-    if (this.tvWidget) {
+    if (this.tvWidget && typeof this.tvWidget.setInterval === 'function') {
       this.tvWidget.setInterval(interval);
     }
   }
@@ -119,10 +119,9 @@ export class ChartCanvas extends Panel {
         'volume.volume.color.0': '#d4af3780',
         'volume.volume.color.1': '#ef444480',
       },
-    });
-
-    this.tvWidget.onChartReady(() => {
-      console.log('[ChartCanvas] TradingView ready');
+      onChartReady: () => {
+        console.log('[ChartCanvas] TradingView ready');
+      },
     });
   }
 

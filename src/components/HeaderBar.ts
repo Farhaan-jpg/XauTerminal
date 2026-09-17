@@ -197,7 +197,19 @@ export class HeaderBar extends Panel {
 
   public playAlert(): void {
     if (!this.soundEnabled) return;
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (ctx.state === 'suspended') {
+        ctx.resume().then(() => this.playTone(ctx));
+      } else {
+        this.playTone(ctx);
+      }
+    } catch (e) {
+      console.warn('Audio play failed:', e);
+    }
+  }
+
+  private playTone(ctx: AudioContext): void {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
