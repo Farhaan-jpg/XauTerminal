@@ -233,6 +233,7 @@ export class App {
   private onGoldUpdate(data: GoldPrice): void {
     this.lastGoldPrice = data;
     this.headerBar.updatePrice(data);
+    this.chartCanvas.updatePrice(data.mid);
     this.updateBiasEngine();
   }
 
