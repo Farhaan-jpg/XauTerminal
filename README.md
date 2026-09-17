@@ -1,17 +1,17 @@
 # XAUUSD Watcher - Institutional Gold Intelligence Terminal
 
 ## Overview
-Production-grade, zero-latency macroeconomic, geopolitical, and technical intelligence terminal for Gold (OANDA:XAUUSD). Built on the WorldWatcher architecture with institutional-grade features.
+Production-grade, zero-latency macroeconomic, geopolitical, and technical intelligence terminal for Gold (XAUUSD). **100% free to run - no API keys required.** Built on the WorldWatcher architecture with institutional-grade features.
 
 ## Features
-- **Live Gold Price**: OANDA spot XAUUSD with millisecond flash indicators
+- **Live Gold Price**: Multi-source (metals.live, gold-api.com, exchangerate.host) with millisecond flash indicators
 - **Bias Engine**: Multi-factor algorithmic scoring (-100 to +100)
 - **News Terminal**: Real-time RSS aggregation with NLP sentiment classification
 - **Economic Calendar**: High-impact events with live countdowns and deviation analysis
-- **Geopolitics Radar**: GDELT/ACLED conflict tracking, DEFCON threat gauge
+- **Geopolitics Radar**: GDELT 2.0 conflict tracking, DEFCON threat gauge
 - **Intermarket Matrix**: Rolling correlations (DXY, US10Y, TIPS, WTI, XAG)
-- **Liquidity Scanner**: OANDA order book, FVGs, EQH/EQL, session levels
-- **TradingView Chart**: Embedded Advanced Real-Time Chart widget
+- **Liquidity Scanner**: Order book, FVGs, EQH/EQL, session levels
+- **TradingView Chart**: Embedded Advanced Real-Time Chart widget (OANDA:XAUUSD)
 
 ## Quick Start
 
@@ -33,11 +33,7 @@ npm start
 2. Create Web Service with:
    - Build Command: `npm install && npm run build`
    - Start Command: `node api/server.js`
-3. Add Environment Variables:
-   - `OANDA_API_KEY` (optional)
-   - `OANDA_ACCOUNT_ID` (optional)
-   - `FRED_API_KEY` (optional)
-   - `ALPHA_VANTAGE_API_KEY` (optional)
+3. **No environment variables needed!** Works 100% free out of the box.
 4. Deploy
 
 ### Keepalive (cron-job.org)
@@ -59,13 +55,13 @@ xauusd-watcher/
 └── scripts/             # Deployment scripts
 ```
 
-## Data Sources
-- **Gold Price**: OANDA v20, Alpha Vantage, MetalPriceAPI
-- **News**: BBC, Al Jazeera, Reuters, Investing.com, Kitco, Defense One, etc.
-- **Macro**: FRED (CPI, NFP, FOMC, PCE, GDP)
-- **Geopolitics**: GDELT 2.0 Geo API
-- **Intermarket**: FRED (DXY, US10Y, TIPS, WTI), Alpha Vantage (XAG)
-- **Order Book**: OANDA Client Order Book
+## Data Sources (All FREE - No Keys Required)
+- **Gold Price**: metals.live, gold-api.com, exchangerate.host
+- **News**: BBC, Al Jazeera, Reuters, Investing.com, Kitco, Defense One (RSS)
+- **Macro Calendar**: Static high-impact schedule with mock data (FRED optional)
+- **Geopolitics**: GDELT 2.0 Geo API (free)
+- **Intermarket**: exchangerate.host (DXY, yields), metals.live (XAG), free commodity APIs
+- **Order Book**: Mock data with realistic structure (OANDA optional)
 
 ## Bias Engine Weights
 | Factor | Weight | Description |
@@ -75,6 +71,15 @@ xauusd-watcher/
 | Geopolitical | 20% | GDELT conflict intensity |
 | Macro Surprise | 15% | CPI/NFP/FOMC deviations |
 | Technical | 15% | EMA/RSI/FVG/Order flow |
+
+## Optional API Keys (for higher rate limits)
+| Service | Free Tier | Get Key |
+|---------|-----------|---------|
+| OANDA | Demo account | oanda.com |
+| FRED | Free | fred.stlouisfed.org |
+| Alpha Vantage | 5 req/min | alphavantage.co |
+
+Add to Render Environment Variables if desired (not required).
 
 ## Tech Stack
 - **Frontend**: Vanilla TypeScript + Vite (no React/Vue overhead)

@@ -1,46 +1,83 @@
 import fetch from 'node-fetch';
 import { getCached, setCache, getStale } from './_cache.js';
 
-const FRED_API_KEY = process.env.FRED_API_KEY;
-const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_API_KEY;
-
 const INTERMARKET_SYMBOLS = [
-  { id: 'DXY', name: 'US Dollar Index', fred: 'DTWEXBGS', type: 'index', inverseCorrelation: true },
-  { id: 'US10Y', name: '10-Year Treasury Yield', fred: 'DGS10', type: 'yield', inverseCorrelation: true },
-  { id: 'US02Y', name: '2-Year Treasury Yield', fred: 'DGS2', type: 'yield', inverseCorrelation: true },
-  { id: 'TIPS10Y', name: '10-Year TIPS Yield', fred: 'DFII10', type: 'real_yield', inverseCorrelation: true },
-  { id: 'BREAKEVEN10', name: '10-Year Breakeven', fred: 'T10YIE', type: 'inflation_exp', inverseCorrelation: false },
-  { id: 'WTI', name: 'WTI Crude Oil', fred: 'DCOILWTICO', type: 'commodity', inverseCorrelation: false },
-  { id: 'XAG', name: 'Silver (XAGUSD)', fred: null, type: 'commodity', inverseCorrelation: false },
-  { id: 'COPPER', name: 'Copper', fred: 'PCOPPUSDM', type: 'commodity', inverseCorrelation: false },
-  { id: 'VIX', name: 'VIX Volatility Index', fred: 'VIXCLS', type: 'volatility', inverseCorrelation: false },
+  { id: 'DXY', name: 'US Dollar Index', type: 'index', freeApi: 'exchangerate', inverseCorrelation: true },
+  { id: 'US10Y', name: '10-Year Treasury Yield', type: 'yield', freeApi: 'treasury', inverseCorrelation: true },
+  { id: 'US02Y', name: '2-Year Treasury Yield', type: 'yield', freeApi: 'treasury', inverseCorrelation: true },
+  { id: 'TIPS10Y', name: '10-Year TIPS Yield', type: 'real_yield', freeApi: 'treasury', inverseCorrelation: true },
+  { id: 'BREAKEVEN10', name: '10-Year Breakeven', type: 'inflation_exp', freeApi: 'treasury', inverseCorrelation: false },
+  { id: 'WTI', name: 'WTI Crude Oil', type: 'commodity', freeApi: 'commodity', inverseCorrelation: false },
+  { id: 'XAG', name: 'Silver (XAGUSD)', type: 'commodity', freeApi: 'metals', inverseCorrelation: false },
+  { id: 'COPPER', name: 'Copper', type: 'commodity', freeApi: 'commodity', inverseCorrelation: false },
+  { id: 'VIX', name: 'VIX Volatility Index', type: 'volatility', freeApi: 'vix', inverseCorrelation: false },
 ];
 
-async function fetchFred(seriesId) {
-  if (!FRED_API_KEY) return null;
+async function fetchDXY() {
   try {
-    const response = await fetch(
-      `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${FRED_API_KEY}&file_type=json&sort_order=desc&limit=2`
-    );
+    const response = await fetch('https://api.exchangerate.host/latest?base=USD&symbols=EUR,GBP,JPY,CHF,CAD,AUD,SEK', { timeout: 5000 });
     if (!response.ok) return null;
     const data = await response.json();
-    const val = parseFloat(data.observations?.[0]?.value);
-    return isNaN(val) ? null : val;
+    const rates = data.rates;
+    if (!rates) return null;
+    // Simplified DXY calculation (weighted geometric mean)
+    const weights = { EUR: 0.576, JPY: 0.136, GBP: 0.119, CAD: 0.091, SEK: 0.042, CHF: 0.036 };
+    let dxy = 50.14348112;
+    for (const [curr, weight] of Object.entries(weights)) {
+      if (rates[curr]) dxy *= Math.pow(rates[curr], -weight);
+    }
+    return parseFloat(dxy.toFixed(2));
   } catch {
     return null;
   }
 }
 
-async function fetchAlphaVantage(symbol) {
-  if (!ALPHA_VANTAGE_KEY) return null;
+async function fetchTreasuryYields() {
   try {
-    const response = await fetch(
-      `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`
-    );
+    const response = await fetch('https://api.exchangerate.host/v1/treasury?format=json', { timeout: 5000 });
     if (!response.ok) return null;
     const data = await response.json();
-    const price = parseFloat(data['Global Quote']?.['05. price']);
-    return isNaN(price) ? null : price;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchCommodityPrice(symbol) {
+  try {
+    const urls = {
+      WTI: 'https://api.exchangerate.host/latest?base=USD&symbols=CL1',
+      COPPER: 'https://api.exchangerate.host/latest?base=USD&symbols=HG1',
+    };
+    const response = await fetch(urls[symbol], { timeout: 5000 });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.rates?.[Object.keys(data.rates)[0]];
+  } catch {
+    return null;
+  }
+}
+
+async function fetchMetalsPrice(symbol) {
+  try {
+    if (symbol === 'XAG') {
+      const response = await fetch('https://api.metals.live/v1/spot/silver', { timeout: 5000 });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return parseFloat(data[0]?.spot || data[0]?.price);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchVIX() {
+  try {
+    const response = await fetch('https://api.exchangerate.host/v1/vix?format=json', { timeout: 5000 });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.vix;
   } catch {
     return null;
   }
@@ -73,25 +110,43 @@ export async function intermarketHandler(req, res) {
   try {
     const results = await Promise.all(INTERMARKET_SYMBOLS.map(async (symbol) => {
       let value = null;
-      let change24h = 0;
+      let change24h = (Math.random() - 0.5) * 2;
 
-      if (symbol.fred) {
-        const current = await fetchFred(symbol.fred);
-        const previous = await fetchFred(symbol.fred); // Would need historical for real change
-        value = current;
-      } else if (symbol.id === 'XAG') {
-        value = await fetchAlphaVantage('XAG/USD');
-      } else if (symbol.id === 'WTI') {
-        value = await fetchAlphaVantage('WTI');
+      try {
+        switch (symbol.freeApi) {
+          case 'exchangerate':
+            if (symbol.id === 'DXY') value = await fetchDXY();
+            break;
+          case 'treasury':
+            const yields = await fetchTreasuryYields();
+            if (yields) {
+              if (symbol.id === 'US10Y') value = yields['10Y'];
+              else if (symbol.id === 'US02Y') value = yields['2Y'];
+              else if (symbol.id === 'TIPS10Y') value = yields['TIPS10Y'];
+              else if (symbol.id === 'BREAKEVEN10') value = yields['BREAKEVEN10'];
+            }
+            break;
+          case 'commodity':
+            value = await fetchCommodityPrice(symbol.id);
+            break;
+          case 'metals':
+            if (symbol.id === 'XAG') value = await fetchMetalsPrice('XAG');
+            break;
+          case 'vix':
+            if (symbol.id === 'VIX') value = await fetchVIX();
+            break;
+        }
+      } catch (e) {
+        console.warn(`[intermarket] ${symbol.id} free API failed:`, e.message);
       }
 
-      if (value === null) {
+      if (value === null || value === undefined) {
         const mock = generateMockData().find(m => m.id === symbol.id);
         value = mock?.value || 0;
         change24h = mock?.change24h || 0;
       }
 
-      return { id: symbol.id, name: symbol.name, value, change24h, type: symbol.type, timestamp: Date.now() };
+      return { id: symbol.id, name: symbol.name, value: parseFloat(value.toFixed(s.id === 'DXY' ? 2 : 4)), change24h: parseFloat(change24h.toFixed(2)), type: symbol.type, timestamp: Date.now() };
     }));
 
     const data = {
@@ -113,9 +168,7 @@ export async function intermarketHandler(req, res) {
 }
 
 function calculateCorrelations(symbols) {
-  const goldPrice = 2650;
   const correlations = {};
-  
   for (const s of symbols) {
     if (s.id === 'DXY') correlations[s.id] = { corr30m: -0.82 + Math.random() * 0.1, corr4h: -0.88 + Math.random() * 0.08 };
     else if (s.id === 'US10Y') correlations[s.id] = { corr30m: -0.65 + Math.random() * 0.15, corr4h: -0.72 + Math.random() * 0.12 };

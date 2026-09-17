@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+.env.local
+.playwright-mcp/
+.vercel
+.claude/
+.cursor/
+.env.vercel-backup
