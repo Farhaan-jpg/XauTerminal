@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: xauusd-watcher
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node api/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: OANDA_API_KEY
+        sync: false
+      - key: OANDA_ACCOUNT_ID
+        sync: false
+      - key: FRED_API_KEY
+        sync: false
+      - key: ALPHA_VANTAGE_API_KEY
+        sync: false
